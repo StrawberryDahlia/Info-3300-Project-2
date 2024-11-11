@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Performance Factors</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            pointer-events: none;
+            opacity: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .controls select, .controls button {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .selected-bubble {
+            stroke: #ff4444;
+            stroke-width: 2px;
+        }
+
+        .connection-line {
+            stroke: #999;
+            stroke-dasharray: 4;
+            opacity: 0.3;
+        }
+
+        .axis-label {
+            font-size: 12px;
+            fill: #666;
+        }
+
+        .legend {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 8px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <!-- Axis Controls -->
+        <div class="axis-controls">
+            <select id="xAxis">
+                <option value="Previous_Scores">Previous Scores</option>
+                <option value="Hours_Studied">Hours Studied</option>
+                <option value="Tutoring_Sessions">Tutoring Sessions</option>
+                <option value="Sleep_Hours">Sleep Hours</option>
+            </select>
+        </div>
+
+        <!-- Filter Groups -->
+        <div class="filter-groups">
+            <!-- Personal Characteristics -->
+            <select id="personalCharacteristics">
+                <option value="">Personal Characteristics...</option>
+                <option value="Motivation_Level">Motivation Level</option>
+                <option value="Learning_Disabilities">Learning Disabilities</option>
+                <option value="Physical_Activity">Physical Activity</option>
+                <option value="Extracurricular_Activities">Extracurricular Activities</option>
+            </select>
+
+            <!-- Family & Socioeconomic -->
+            <select id="familyFactors">
+                <option value="">Family & Socioeconomic...</option>
+                <option value="Family_Income">Family Income</option>
+                <option value="Parental_Education_Level">Parental Education</option>
+                <option value="Parental_Involvement">Parental Involvement</option>
+                <option value="Internet_Access">Internet Access</option>
+                <option value="Access_to_Resources">Access to Resources</option>
+            </select>
+
+            <!-- School Environment -->
+            <select id="schoolEnvironment">
+                <option value="">School Environment...</option>
+                <option value="School_Type">School Type</option>
+                <option value="Teacher_Quality">Teacher Quality</option>
+                <option value="Distance_from_Home">Distance from Home</option>
+                <option value="Peer_Influence">Peer Influence</option>
+            </select>
+
+            <!-- Gender -->
+            <select id="genderFilter">
+                <option value="">Gender...</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+            </select>
+        </div>
+    </div>
+    <div id="chart"></div>
+
+    <script>
+        // Set up dimensions
+        const width = 960;
+        const height = 600;
+        const margin = {top: 40, right: 40, bottom: 60, left: 60};
+
+        // Create SVG
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Create scales (we'll update domains when data loads)
+        const xScale = d3.scaleLinear()
+            .range([margin.left, width - margin.right]);
+
+        const yScale = d3.scaleLinear()
+            .range([height - margin.bottom, margin.top]);
+
+        // Load and process data
+        d3.csv("StudentPerformanceFactors.csv").then(data => {
+            // Convert string values to numbers where needed
+            data.forEach(d => {
+                d.Hours_Studied = +d.Hours_Studied;
+                d.Sleep_Hours = +d.Sleep_Hours;
+                d.Previous_Scores = +d.Previous_Scores;
+                d.Tutoring_Sessions = +d.Tutoring_Sessions;
+                d.Exam_Score = +d.Exam_Score;
+            });
+
+            function updateVis() {
+                // Get current selections
+                const xMetric = d3.select("#xAxis").property("value");
+                const personalFilter = d3.select("#personalCharacteristics").property("value");
+                const familyFilter = d3.select("#familyFactors").property("value");
+                const schoolFilter = d3.select("#schoolEnvironment").property("value");
+                const genderFilter = d3.select("#genderFilter").property("value");
+
+                // Determine which filter to use for coloring
+                let activeFilter = null;
+                let activeFilterValues = [];
+                
+                if (personalFilter) {
+                    activeFilter = personalFilter;
+                    activeFilterValues = [...new Set(data.map(d => d[personalFilter]))].sort();
+                } else if (familyFilter) {
+                    activeFilter = familyFilter;
+                    activeFilterValues = [...new Set(data.map(d => d[familyFilter]))].sort();
+                } else if (schoolFilter) {
+                    activeFilter = schoolFilter;
+                    activeFilterValues = [...new Set(data.map(d => d[schoolFilter]))].sort();
+                } else if (genderFilter) {
+                    activeFilter = 'Gender';
+                    activeFilterValues = ['Male', 'Female'];
+                }
+
+                // Create color scale based on active filter
+                const colorScale = d3.scaleOrdinal()
+                    .domain(activeFilterValues)
+                    .range(d3.schemeCategory10);
+
+                // Update legend
+                const legend = d3.select(".legend");
+                if (legend.empty()) {
+                    d3.select("#chart").append("div")
+                        .attr("class", "legend");
+                }
+
+                const legendItems = d3.select(".legend")
+                    .style("display", activeFilter ? "block" : "none")
+                    .html(activeFilter ? `<div style="margin-bottom: 8px;"><strong>${activeFilter.replace(/_/g, ' ')}</strong></div>` : "")
+                    .selectAll(".legend-item")
+                    .data(activeFilter ? activeFilterValues : []);
+
+                const legendEnter = legendItems.enter()
+                    .append("div")
+                    .attr("class", "legend-item");
+
+                legendEnter.append("div")
+                    .attr("class", "legend-color");
+
+                legendEnter.append("div")
+                    .attr("class", "legend-label");
+
+                legendItems.exit().remove();
+
+                d3.selectAll(".legend-item").each(function(d) {
+                    d3.select(this).select(".legend-color")
+                        .style("background-color", colorScale(d));
+                    d3.select(this).select(".legend-label")
+                        .text(d);
+                });
+
+                // Filter data based on all active filters
+                let filteredData = data;
+                
+                if (personalFilter) {
+                    filteredData = filteredData.filter(d => d[personalFilter] !== undefined);
+                }
+                if (familyFilter) {
+                    filteredData = filteredData.filter(d => d[familyFilter] !== undefined);
+                }
+                if (schoolFilter) {
+                    filteredData = filteredData.filter(d => d[schoolFilter] !== undefined);
+                }
+                if (genderFilter) {
+                    filteredData = filteredData.filter(d => d.Gender === genderFilter);
+                }
+
+                // Update scales
+                xScale.domain([0, d3.max(filteredData, d => d[xMetric])]);
+                yScale.domain([
+                    Math.floor(d3.min(filteredData, d => d.Exam_Score) / 5) * 5,
+                    Math.ceil(d3.max(filteredData, d => d.Exam_Score) / 5) * 5
+                ]);
+
+                // Draw points
+                const points = svg.selectAll("circle")
+                    .data(filteredData);
+
+                // Enter new points
+                points.enter()
+                    .append("circle")
+                    .merge(points)
+                    .attr("cx", d => xScale(d[xMetric]))
+                    .attr("cy", d => yScale(d.Exam_Score))
+                    .attr("r", 3)
+                    .attr("fill", d => activeFilter ? colorScale(d[activeFilter]) : "#4682b4")
+                    .attr("opacity", 0.6);
+
+                // Remove old points
+                points.exit().remove();
+
+                // Update axes
+                const xAxis = d3.axisBottom(xScale);
+                const yAxis = d3.axisLeft(yScale);
+
+                svg.selectAll(".x-axis").remove();
+                svg.selectAll(".y-axis").remove();
+
+                svg.append("g")
+                    .attr("class", "x-axis")
+                    .attr("transform", `translate(0,${height - margin.bottom})`)
+                    .call(xAxis);
+
+                svg.append("g")
+                    .attr("class", "y-axis")
+                    .attr("transform", `translate(${margin.left},0)`)
+                    .call(yAxis);
+
+                // Add axis labels
+                svg.selectAll(".axis-label").remove();
+
+                // X-axis label
+                svg.append("text")
+                    .attr("class", "axis-label")
+                    .attr("x", width / 2)
+                    .attr("y", height - 10)
+                    .style("text-anchor", "middle")
+                    .text(xMetric.replace(/_/g, ' '));
+
+                // Y-axis label
+                svg.append("text")
+                    .attr("class", "axis-label")
+                    .attr("transform", "rotate(-90)")
+                    .attr("x", -height / 2)
+                    .attr("y", 20)
+                    .style("text-anchor", "middle")
+                    .text("Exam Score");
+            }
+
+            // Initial visualization
+            updateVis();
+
+            // Add event listeners
+            d3.selectAll("select").on("change", updateVis);
+        });
+    </script>
+</body>
+</html>
