@@ -3,12 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Student Performance Analysis</title>
-    <!-- Include D3.js library -->
     <script src="https://d3js.org/d3.v6.min.js"></script>
-    <!-- Include a Google Font for better typography -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap">
     <style>
-        /* Global Styling */
         body {
             font-family: 'Roboto', sans-serif;
             background-color: #f7f9fc;
@@ -87,7 +84,6 @@
 <body>
     <h1>Student Performance Analysis Dashboard</h1>
 
-    <!-- Global Controls for all charts -->
     <div class="controls">
         <label for="xAxis">Select X-Axis Metric:</label>
         <select id="xAxis">
@@ -110,7 +106,6 @@
     <div class="chart-controls" id="controls-personal">
         <label for="variableSelector-personal">Color by:</label>
         <select class="variableSelector" id="variableSelector-personal" data-chart="personal">
-            <option value="">Select Variable...</option>
         </select>
     </div>
     <div id="chart-personal"></div>
@@ -120,8 +115,6 @@
     <div class="chart-controls" id="controls-family">
         <label for="variableSelector-family">Color by:</label>
         <select class="variableSelector" id="variableSelector-family" data-chart="family">
-            <option value="">Select Variable...</option>
-            <!-- Options will be populated dynamically -->
         </select>
     </div>
     <div id="chart-family"></div>
@@ -131,19 +124,27 @@
     <div class="chart-controls" id="controls-school">
         <label for="variableSelector-school">Color by:</label>
         <select class="variableSelector" id="variableSelector-school" data-chart="school">
-            <option value="">Select Variable...</option>
-            <!-- Options will be populated dynamically -->
         </select>
     </div>
     <div id="chart-school"></div>
 
-    <!-- Tooltip Div -->
+    <!-- Chart 4: Study Patterns -->
+    <h2>Study Patterns</h2>
+    <div id="chart-study"></div>
+
+    <!-- Chart 5: Daily Activities -->
+    <h2>Daily Activities</h2>
+    <div id="chart-activities"></div>
+
+    <!-- Chart 6: Student Wellness -->
+    <h2>Student Wellness</h2>
+    <div id="chart-wellness"></div>
+
     <div class="tooltip" style="opacity: 0;"></div>
 
     <script>
         const width = 960, height = 500, margin = { top: 80, right: 150, bottom: 60, left: 60 };
 
-        // Mapping of categories to variables
         const categoryVariables = {
             "Personal Characteristics": [
                 { value: "Motivation_Level", text: "Motivation Level" },
@@ -162,6 +163,19 @@
                 { value: "School_Type", text: "School Type" },
                 { value: "Teacher_Quality", text: "Teacher Quality" },
                 { value: "Peer_Influence", text: "Peer Influence" }
+            ],
+            "Study Patterns": [
+                { value: "Study_Hours_Per_Week", text: "Weekly Study Hours" },
+                { value: "GPA", text: "GPA" }
+            ],
+            "Daily Activities": [
+                { value: "Social_Hours_Per_Week", text: "Weekly Social Hours" },
+                { value: "Extracurricular_Hours_Per_Week", text: "Weekly Extracurricular Hours" },
+                { value: "Physical_Activity_Hours_Per_Week", text: "Weekly Physical Activity Hours" }
+            ],
+            "Student Wellness": [
+                { value: "Sleep_Hours_Per_Week", text: "Weekly Sleep Hours" },
+                { value: "Stress_Level", text: "Stress Level" }
             ]
         };
 
@@ -186,18 +200,34 @@
             }
         ];
 
+        const lifestyleCharts = [
+            {
+                id: "chart-study",
+                title: "Study Patterns",
+                variable: "Study_Hours_Per_Day"
+            },
+            {
+                id: "chart-activities",
+                title: "Daily Activities",
+                variable: "Physical_Activity_Hours_Per_Day"
+            },
+            {
+                id: "chart-wellness",
+                title: "Student Wellness",
+                variable: "Sleep_Hours_Per_Day"
+            }
+        ];
+
         const createSVG = (id) => d3.select(`#${id}`)
             .append("svg")
             .attr("width", width)
             .attr("height", height);
 
-        //  Arrays to store chart-specific variables
         const svgs = [];
         const xScales = [];
         const yScales = [];
 
         d3.csv("StudentPerformanceFactors.csv").then(data => {
-            // Convert numeric fields
             data.forEach(d => {
                 d.Hours_Studied = +d.Hours_Studied;
                 d.Sleep_Hours = +d.Sleep_Hours;
@@ -207,13 +237,21 @@
                 d.Physical_Activity = +d.Physical_Activity;
             });
 
-            // Randomly sample 50% of the data
-            // const sampleSize = Math.floor(data.length * 0.5);
-            // data = data
-            //     .sort(() => Math.random() - 0.5)  // Shuffle the array
-            //     .slice(0, sampleSize);            // Take first half
+            d3.csv("StudentLifestyleDataset.csv").then(function(data) {
+                data.forEach(d => {
+                    d.Study_Hours_Per_Day = +d.Study_Hours_Per_Day;
+                    d.Extracurricular_Hours_Per_Day = +d.Extracurricular_Hours_Per_Day;
+                    d.Sleep_Hours_Per_Day = +d.Sleep_Hours_Per_Day;
+                    d.Social_Hours_Per_Day = +d.Social_Hours_Per_Day;
+                    d.Physical_Activity_Hours_Per_Day = +d.Physical_Activity_Hours_Per_Day;
+                    d.GPA = +d.GPA;
+                });
 
-            // Initialize charts and store references
+                lifestyleCharts.forEach(chart => {
+                    createLifestyleChart(`#${chart.id}`, data, chart.variable);
+                });
+            });
+
             charts.forEach((chart, index) => {
                 const svg = createSVG(chart.id);
                 svgs.push(svg);
@@ -224,26 +262,24 @@
                 xScales.push(xScale);
                 yScales.push(yScale);
 
-                // Populate variable selector options for each chart
                 const variables = categoryVariables[chart.category];
 
                 const variableSelect = d3.select(`#${chart.controlsId}`).select(".variableSelector");
 
                 if (variables) {
-                    variables.forEach(variable => {
+                    variables.forEach((variable, idx) => {
                         variableSelect.append("option")
                             .attr("value", variable.value)
-                            .text(variable.text);
+                            .text(variable.text)
+                            .property("selected", idx === 0);
                     });
                 } else {
                     console.error(`No variables found for category "${chart.category}".`);
                 }
             });
 
-            // Tooltip
             const tooltip = d3.select(".tooltip");
 
-            // Define all categorical variables
             const categoricalVariables = [
                 "Gender", 
                 "School_Type",
@@ -260,7 +296,6 @@
                 "Extracurricular_Activities" // Yes, No
             ];
 
-            // Define updateVis function
             const updateVis = () => {
                 const xMetric = d3.select("#xAxis").property("value");
                 const genderFilter = d3.select("#genderFilter").property("value");
@@ -276,7 +311,6 @@
                     const controls = d3.select(`#${chart.controlsId}`);
                     const variable = controls.select(".variableSelector").property("value");
 
-                    // Proceed only if a variable is selected
                     if (!variable) {
                         svg.selectAll("*").remove();
                         return;
@@ -284,10 +318,8 @@
 
                     let chartData = filteredData;
 
-                    // Exclude data points with undefined values
                     chartData = chartData.filter(d => d[variable] !== undefined && d[variable] !== "" && d[xMetric] !== undefined && d[xMetric] !== "");
 
-                    // Define rounding factor based on the metric
                     let roundingFactor;
                     switch(xMetric) {
                         case 'Sleep_Hours':
@@ -304,7 +336,6 @@
                             roundingFactor = 1;
                     }
 
-                    // Update scales
                     xScale.domain([
                         Math.floor(d3.min(chartData, d => d[xMetric]) / roundingFactor) * roundingFactor,
                         Math.ceil(d3.max(chartData, d => d[xMetric]) / roundingFactor) * roundingFactor
@@ -316,34 +347,26 @@
 
                     svg.selectAll("*").remove();
 
-                    // Get categories and set up color scale
                     let categories = [...new Set(chartData.map(d => d[variable]))].filter(v => v !== undefined && v !== "");
                     
-                    // Custom sorting for specific categorical variables
                     const educationOrder = ["High School", "College", "Postgraduate"];
                     const levelOrder = ["Low", "Medium", "High"];
                     const influenceOrder = ["Negative", "Neutral", "Positive"];
 
-                    // Sort categories based on variable type
                     categories.sort((a, b) => {
-                        // For education levels
                         if (variable === "Parental_Education_Level") {
                             return educationOrder.indexOf(a) - educationOrder.indexOf(b);
                         }
-                        // For variables with Low/Medium/High values
                         else if (["Motivation_Level", "Teacher_Quality", "Family_Income", 
                                 "Access_to_Resources", "Parental_Involvement"].includes(variable)) {
                             return levelOrder.indexOf(a) - levelOrder.indexOf(b);
                         }
-                        // For Peer Influence
                         else if (variable === "Peer_Influence") {
                             return influenceOrder.indexOf(a) - influenceOrder.indexOf(b);
                         }
-                        // For numeric values
                         else if (!isNaN(a) && !isNaN(b)) {
                             return Number(a) - Number(b);
                         }
-                        // Default alphabetical sorting for other categories
                         return a.localeCompare(b);
                     });
 
@@ -351,7 +374,6 @@
                         .domain(categories)
                         .range(categories.map((_, i) => d3.interpolateBlues(0.2 + (i * 1 / categories.length))));
 
-                    // Calculate median lines
                     const medianLines = categories.map(category => {
                         const categoryData = chartData.filter(d => d[variable] === category);
                         
@@ -366,7 +388,6 @@
 
                         points.sort((a, b) => a.x - b.x);
 
-                        // Apply moving average smoothing
                         const windowSize = 2;
                         const smoothedPoints = points.map((point, i) => {
                             const window = points.slice(
@@ -383,7 +404,6 @@
                         return smoothedPoints;
                     });
 
-                    // Draw lines for each category
                     medianLines.forEach(points => {
                         const line = d3.line()
                             .x(d => xScale(d.x))
@@ -394,22 +414,26 @@
                             .datum(points)
                             .attr("fill", "none")
                             .attr("stroke", colorScale(points[0].category))
-                            .attr("stroke-width", 2)
+                            .attr("stroke-width", 3)
                             .attr("d", line)
                             .style("opacity", 1);
                     });
 
-                    // Draw points
                     svg.selectAll("circle")
                         .data(chartData)
                         .enter()
                         .append("circle")
                         .attr("cx", d => xScale(d[xMetric]))
                         .attr("cy", d => yScale(d.Exam_Score))
-                        .attr("r", 3)
+                        .attr("r", 2)  
                         .attr("fill", d => colorScale(d[variable]))
-                        .attr("opacity", 0.05)
+                        .attr("opacity", 1)  
                         .on("mouseover", function(event, d) {
+                            d3.select(this)
+                                .raise()  
+                                .transition()
+                                .duration(200)
+                                .attr("r", 6); 
                             tooltip.transition()
                                 .duration(200)
                                 .style("opacity", .9);
@@ -422,26 +446,26 @@
                             .style("top", (event.pageY - 28) + "px");
                         })
                         .on("mouseout", function(d) {
+                            d3.select(this)
+                                .transition()
+                                .duration(200)
+                                .attr("r", 2);  // Return to original radius
                             tooltip.transition()
                                 .duration(500)
                                 .style("opacity", 0);
                         });
 
-                    // Add axes
                     const xAxis = d3.axisBottom(xScale);
                     const yAxis = d3.axisLeft(yScale);
 
-                    // Add X axis
                     svg.append("g")
                         .attr("transform", `translate(0,${height - margin.bottom})`)
                         .call(xAxis);
 
-                    // Add Y axis
                     svg.append("g")
                         .attr("transform", `translate(${margin.left},0)`)
                         .call(yAxis);
 
-                    // Add X axis label
                     svg.append("text")
                         .attr("class", "axis-label")
                         .attr("x", width / 2)
@@ -449,7 +473,6 @@
                         .style("text-anchor", "middle")
                         .text(xMetric.replace(/_/g, " "));
 
-                    // Add Y axis label
                     svg.append("text")
                         .attr("class", "axis-label")
                         .attr("transform", "rotate(-90)")
@@ -458,7 +481,6 @@
                         .style("text-anchor", "middle")
                         .text("Exam Score");
 
-                    // Add chart title
                     svg.append("text")
                         .attr("class", "chart-title")
                         .attr("x", width / 2)
@@ -466,15 +488,12 @@
                         .style("text-anchor", "middle")
                         .text(chart.title);
 
-                    // Add legend with interactive elements
                     const legend = svg.append("g")
                         .attr("class", "legend")
                         .attr("transform", `translate(${width - margin.right + 20}, ${margin.top})`);
 
-                    // Keep track of active categories (start with all active)
                     const activeCategories = new Set(categories);
 
-                    // Create legend group for each item
                     const legendItems = legend.selectAll("g")
                         .data(categories)
                         .enter()
@@ -482,24 +501,19 @@
                         .attr("transform", (d, i) => `translate(0, ${i * 20})`)
                         .style("cursor", "pointer")
                         .on("click", function(event, category) {
-                            // Toggle category
                             if (activeCategories.has(category)) {
                                 activeCategories.delete(category);
                                 d3.select(this).style("opacity", 0.5);
-                                // Hide checkmark
                                 d3.select(this).select(".checkmark").style("opacity", 0);
                             } else {
                                 activeCategories.add(category);
                                 d3.select(this).style("opacity", 1);
-                                // Show checkmark
                                 d3.select(this).select(".checkmark").style("opacity", 1);
                             }
 
-                            // Update visibility of points
                             svg.selectAll("circle")
                                 .style("display", d => activeCategories.has(d[variable]) ? null : "none");
 
-                            // Update visibility of lines
                             svg.selectAll("path")
                                 .style("display", function(d) {
                                     if (!d || d.length === 0) return "none";
@@ -507,13 +521,11 @@
                                 });
                         });
 
-                    // Add colored rectangles
                     legendItems.append("rect")
                         .attr("width", 12)
                         .attr("height", 12)
                         .attr("fill", d => colorScale(d));
 
-                    // Add checkmark symbol
                     legendItems.append("text")
                         .attr("class", "checkmark")
                         .attr("x", 2)  // Center in the square
@@ -524,13 +536,11 @@
                         .text("✓")
                         .style("opacity", 1); // Start with all checkmarks visible
 
-                    // Add text labels
                     legendItems.append("text")
                         .attr("x", 20)
                         .attr("y", 10)
                         .text(d => d);
 
-                    // Add hover effect
                     legendItems
                         .on("mouseover", function() {
                             d3.select(this)
@@ -544,10 +554,8 @@
                 });
             };
 
-            // Attach event listeners
             d3.selectAll("#xAxis, #genderFilter").on("change", updateVis);
 
-            // Event listeners for variable selectors
             charts.forEach(chart => {
                 const controls = d3.select(`#${chart.controlsId}`);
                 const variableSelect = controls.select(".variableSelector");
@@ -557,11 +565,129 @@
                 });
             });
 
-            // Initial visualization
             updateVis();
         }).catch(error => {
             console.error("Error loading or parsing data:", error);
         });
+
+        function createLifestyleChart(selector, data, xVariable) {
+            const svg = d3.select(selector)
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const xMin = (xVariable === "Study_Hours_Per_Day" || xVariable === "Sleep_Hours_Per_Day") ? 5 : 0;
+            const xScale = d3.scaleLinear()
+                .domain([xMin, d3.max(data, d => d[xVariable])])
+                .range([margin.left, width - margin.right]);
+
+            const yScale = d3.scaleLinear()
+                .domain([2, 4])  // GPA typically ranges from 2.0 to 4.0
+                .range([height - margin.bottom, margin.top]);
+
+            const stressColorScale = d3.scaleOrdinal()
+                .domain(["Low", "Moderate", "High"])
+                .range(["#4CAF50", "#FFC107", "#f44336"]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(xScale));
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(yScale));
+
+            svg.append("text")
+                .attr("class", "axis-label")
+                .attr("x", width / 2)
+                .attr("y", height - margin.bottom / 3)
+                .style("text-anchor", "middle")
+                .text(`${xVariable.replace(/_/g, " ")}`);
+
+            svg.append("text")
+                .attr("class", "axis-label")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -(height / 2))
+                .attr("y", margin.left / 2)
+                .style("text-anchor", "middle")
+                .text("GPA");
+
+            svg.selectAll("circle")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("cx", d => xScale(d[xVariable]))
+                .attr("cy", d => yScale(d.GPA))
+                .attr("r", 2)
+                .style("fill", d => stressColorScale(d.Stress_Level))
+                .style("opacity", 0.7)
+                .append("title")
+                .text(d => `${xVariable.replace(/_/g, " ")}: ${d[xVariable]}\nGPA: ${d.GPA}\nStress Level: ${d.Stress_Level}`);
+
+            const legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", `translate(${width - margin.right + 20}, ${margin.top})`);
+
+            const activeStressLevels = new Set(["Low", "Moderate", "High"]);
+
+            legend.append("text")
+                .attr("x", 0)
+                .attr("y", -10)
+                .text("Stress Level")
+                .style("font-size", "12px")
+                .style("font-weight", "bold");
+
+            const legendItems = legend.selectAll("g")
+                .data(["Low", "Moderate", "High"])
+                .enter()
+                .append("g")
+                .attr("transform", (d, i) => `translate(0, ${i * 20})`)
+                .style("cursor", "pointer")
+                .on("click", function(event, stressLevel) {
+                    if (activeStressLevels.has(stressLevel)) {
+                        activeStressLevels.delete(stressLevel);
+                        d3.select(this).style("opacity", 0.5);
+                        d3.select(this).select(".checkmark").style("opacity", 0);
+                    } else {
+                        activeStressLevels.add(stressLevel);
+                        d3.select(this).style("opacity", 1);
+                        d3.select(this).select(".checkmark").style("opacity", 1);
+                    }
+
+                    svg.selectAll("circle")
+                        .style("display", d => activeStressLevels.has(d.Stress_Level) ? null : "none");
+                });
+
+            legendItems.append("rect")
+                .attr("width", 12)
+                .attr("height", 12)
+                .attr("fill", d => stressColorScale(d));
+
+            legendItems.append("text")
+                .attr("class", "checkmark")
+                .attr("x", 2)  // Center in the square
+                .attr("y", 10)
+                .style("font-size", "12px")
+                .style("fill", "white")  // Make checkmark white for better contrast
+                .style("font-weight", "bold")
+                .text("✓")
+                .style("opacity", 1); // Start with all checkmarks visible
+
+            legendItems.append("text")
+                .attr("x", 20)
+                .attr("y", 10)
+                .text(d => d);
+
+            legendItems
+                .on("mouseover", function() {
+                    d3.select(this)
+                        .style("filter", "brightness(0.8)");
+                })
+                .on("mouseout", function() {
+                    d3.select(this)
+                        .style("filter", null);
+                });
+        }
     </script>
 </body>
 </html>
